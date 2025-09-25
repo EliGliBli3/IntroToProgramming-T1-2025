@@ -15,4 +15,4 @@ print(f"Entered supplies:\nOxygen Tanks: {oxygen_tanks}\nFood Packs: {food_packs
 oxygen_tanks = input("\nPlease reconfirm oxygen tank supply.\n> ")
 
 os.system('cls')
-print(f"All supplies confirmed:\nOxygen Tanks: {oxygen_tanks}\nFood Packs: {food_packs}\nWater Packs: {water_packs}\n\nTime until takeoff: {countdown}")
+print(f"All supplies confirmed:\nOxygen Tanks: {oxygen_tanks}\nFood Packs: {food_packs}\nWater Packs: {water_packs}\n\nTime until takeoff: {countdown} seconds")
