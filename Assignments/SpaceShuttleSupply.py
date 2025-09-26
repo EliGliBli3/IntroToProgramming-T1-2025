@@ -3,8 +3,8 @@ import os
 os.system('cls')
 print("Preparing for takeoff. Please confirm the following:\n")
 countdown = input("Seconds until launch > ")
-os.system('cls')
 
+os.system('cls')
 print("Please provide the quantities aboard for the following:")
 oxygen_tanks = input("\nOxygen tanks > ")
 food_packs = input("Food Packs > ")
