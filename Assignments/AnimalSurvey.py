@@ -1,15 +1,15 @@
 import os
 
-def prompt_can_fly():
+def prompt_can_fly():   # Force a 'y' or 'n' flight answer from the user
     os.system('cls')
     print("Please provide a 'y' for yes or an 'n' for no.")
     can_fly = input("\nCan your animal fly? (y/n)\n> ")
     if(can_fly.lower() == "y" or can_fly.lower() == "n"):
-        return True if can_fly == 'y' else False
+        return True if can_fly == 'y' else False    # Return a boolean for 'yes' or 'no' input
     return prompt_can_fly()
 
-os.system('cls')
-fav_animal = input("\nWhat is your favorite animal?\n> ")
+os.system('cls')    # Clear the console
+fav_animal = input("\nWhat is your favorite animal?\n> ")   # Request user input and store in variable 'fav_animal'
 os.system('cls')
 reason = input("\nWhy is this your favorite animal?\n> ")
 os.system('cls')
@@ -23,7 +23,7 @@ animal_fun_fact = input("\nWhat is one fun fact about your animal?\n> ")
 os.system('cls')
 animal_color = input("\nWhat color is your animal?\n> ")
 
-animal_can_fly = prompt_can_fly()
+animal_can_fly = prompt_can_fly()   # Boolean
 
 
 
@@ -31,7 +31,7 @@ os.system('cls')
 summary = f"Your favorite animal is the {fav_animal.lower()} because {reason.lower()}." \
 +f" It's {animal_size.lower()} sized, {animal_color.lower()}, and makes the {animal_sound.lower()} sound." \
 +f" A fun fact about this animal is that {animal_fun_fact.lower()}." \
-+f" This animal comes from {animal_location.lower()} and can {"" if animal_can_fly else "not "}fly."
++f" This animal comes from {animal_location.lower()} and can {"" if animal_can_fly else "not "}fly."    # Summarize all variables; "\" moves code to the next line.
 
 
-print(summary)
+print(summary)  # Print the summary
