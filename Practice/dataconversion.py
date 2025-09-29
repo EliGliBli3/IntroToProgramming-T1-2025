@@ -16,7 +16,7 @@ print(str(e))
 f = False       #boolean -> string
 print(str(f))
 g = '10110111'  #byte -> int
-print(int(g))
+print(int(g,2))
 h = "2.54"      #string -> float
 print(float(h))
 i = 100         #int -> float
