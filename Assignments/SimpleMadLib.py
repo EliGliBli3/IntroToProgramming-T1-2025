@@ -20,7 +20,7 @@ Steps to creation
 
 '''
 input_list = []
-def PrintMadLib():
+def print_mad_lib():
     global input_list
 
     print(f"Today I went to my favorite Taco Stand called the {input_list[0]} {input_list[1]}. " \
@@ -46,4 +46,4 @@ for i in range(10):
         case 9: input_type = " saying"
     input_list.append(input(f"Enter a{input_type}:\n> "))
 os.system('cls')    # clear the console
-PrintMadLib()
+print_mad_lib()
