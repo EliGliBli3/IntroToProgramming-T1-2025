@@ -28,7 +28,6 @@ def print_mad_lib():
     + f"The best thing on the menu is the {input_list[4]} {input_list[5]}. " \
     + f"Instead of ground beef they fill the taco with {input_list[6]}, cheese, and top it off with a salsa made from {input_list[7]}. " \
     + f"If that doesn't make your mouth water, then it's just like {input_list[8]} always says: {input_list[9]}!\n\n")
-
 for i in range(10):
     os.system('cls')    # clear the console
     
