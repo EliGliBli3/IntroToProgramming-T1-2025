@@ -37,7 +37,7 @@ match operation:
     case "/": message = Calculator.divide()
     case "^": message = Calculator.pow()
     case "%": message = Calculator.mod()
-    case "//": message = Calculator.mod()
+    case "//": message = Calculator.floor_divide()
     case default: print("Invalid operation")
 
 print(message)
