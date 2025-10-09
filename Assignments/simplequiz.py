@@ -15,7 +15,7 @@ def tally_score():
     global score
     if answer_1 == "4" or answer_1.lower() == "four": score+=1
     if answer_2 == "5" or answer_2.lower() == "five": score+=1
-    if 13927000 - int(answer_3) < 100000: score+=1
+    if abs(13927000 - int(answer_3)) < 100000: score+=1
     if answer_4 == "12:00" or answer_4.lower() == "12 pm": score+=1
     if answer_5 == "4" or answer_5.lower() == "four": score+=1
     if answer_6 == "60" or answer_6.lower() == "sixty": score+=1
