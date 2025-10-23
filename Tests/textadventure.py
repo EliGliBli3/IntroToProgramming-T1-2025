@@ -1,6 +1,15 @@
 import os, random
 from enum import Enum
 
+def restart():
+    global fih
+    fih = Fih(
+        luck=random.randrange(10, 200)/100 # 0.1 -> 2
+    )
+    
+    prompt_encounter(encounter_handler.start_life)
+    
+
 class Encounter:
         def __init__(self, prompt: str, options: list):
             self.prompt = prompt
@@ -12,14 +21,18 @@ class Location(Enum):
     WATER_DEEP = "the bottom"
     REEF = "the reef"
     CAVE = "the cave"
+    DEEP_REEF = "the inner reef"
+    DEEP_CAVE = "the end of the cave"
 
 class Fih:
+    hunger = 1
+    
     def __init__(self, luck):
         # Birth variables
         self.luck = luck
         
         # Active variables
-        self.hunger = 0
+        self.hunger = 1
         self.food_types = ["plankton"]
         self.health = 0.5
         self.energy = 0.5
@@ -31,14 +44,14 @@ class Fih:
         self.sociability = 0
     
     def update(self):
-        self.hunger -= 0.2
-        self.energy -= 0.1
+        self.hunger -= 0.05
+        self.energy -= 0.025
         self.age += 0.1
         
         self.luck = max(0.1, self.luck)
         self.boldness = max(0.1, self.boldness)
         self.sociability = max(0.1, self.sociability)
-        
+            
 fih = Fih(
     luck=random.randrange(10, 200)/100 # 0.1 -> 2
 )
@@ -56,39 +69,40 @@ def eat_challenge(fighting: bool):
     if fighting:
         chance_lose = 0.5 / (fih.luck+1) / (fih.energy+1)
         if random.random() <= chance_lose:
-            prompt_encounter(encounter_handler.confirmation("You lose the fight and the food. You are still hungry, and you have less energy."))
             fih.energy -= 0.2
+            prompt_encounter(encounter_handler.confirmation("You lose the fight and the food. You are still hungry, and you have less energy."))
         else:
-            prompt_encounter(encounter_handler.confirmation("You win the fight and the food. You are satiated, but you have less energy."))
-            fih.hunger = 0
+            fih.hunger = 1
             fih.energy -= 0.15
+            prompt_encounter(encounter_handler.confirmation("You win the fight and the food. You are satiated, but you have less energy."))
     else:
         prompt_encounter(encounter_handler.confirmation("You surrender the food. Nothing changes."))
 
 def eat():
+    global fih
     chance_sick = (0.25 / fih.luck) / fih.health
     chance_fight = (0.1 / fih.luck) / fih.sociability
     
     match fih.age:
-        case n if n <= 0.2:
+        case n if n <= 0.5:
             fih.food_types = ["plankton", "fleas", "copepods"]
-        case n if 0.2 < n <= 0.5:
-            fih.food_types = ["worms", "larvae", "nymphs"]
         case n if 0.5 < n <= 1.5:
+            fih.food_types = ["worms", "larvae", "nymphs"]
+        case n if 1.5 < n <= 3:
             fih.food_types = ["sowbugs", "worms", "snail"]
         case _:
             fih.food_types = ["minnow", "sunfish", "crayfish"]
             
     
     if random.random() <= chance_sick:
+        fih.hunger = 1
+        fih.energy -= 0.2
         prompt_encounter(encounter_handler.confirmation(f"The {random.choice(fih.food_types)} you ate makes you feel ill.\nYou are satiated, but have less energy."))
-        fih.hunger = 0
-        fih.energy -= 0.75
     elif random.random() <= chance_fight:
         prompt_encounter(encounter_handler.eat_fight)
     else:
+        fih.hunger = 1
         prompt_encounter(encounter_handler.confirmation(f"You eat the {random.choice(fih.food_types)}. You are satiated"))
-        fih.hunger = 0
 
 def sleep():
     print("Slept")
@@ -105,8 +119,6 @@ class Encounters:
                 ("Eat", eat),
                 ("Sleep", sleep)
             ])
-        #self.wait  <- no longer needed, replaced by get_wait_encounter().
-        
         self.eat_fight = Encounter(
             f"You go for the {random.choice(fih.food_types)}, but are challenged.",
             [
@@ -114,6 +126,9 @@ class Encounters:
                 ("Surrender", lambda: eat_challenge(False))
             ]
         )
+        
+    def get_explore_encounter(self):
+        pass
         
     def get_wait_encounter(self):
         options = [
@@ -152,15 +167,25 @@ class Encounters:
         return Encounter(
             msg,
             [
-                ("Continue", self.get_wait_encounter)
+                ("Continue", lambda: prompt_encounter(self.get_wait_encounter()))
             ]
         )
         
 encounter_handler = Encounters()
 
 def prompt_encounter(encounter:Encounter):
+    global fih
+    fih.update()
+    
     def get_response():
         os.system('cls')
+        
+        print(f"-- Stats --\n\
+Food   {(chr(9608) + " ") * int(fih.hunger//0.1)}\n\
+Energy {(chr(9608) + " ") * int(fih.energy//0.1)}\n\
+Age    {(chr(9608) + " ") * int(fih.age//0.5)}\n\n\
+          ")
+        
         print(encounter.prompt + "\n----------\n")
         for i, option in enumerate(encounter.options):
             print(f"{i+1}) {option[0]}")
@@ -176,8 +201,16 @@ def prompt_encounter(encounter:Encounter):
     response = get_response()
     
     os.system('cls')
-    fih.update()
     encounter.options[response-1][1]()
 
 prompt_encounter(encounter_handler.start_life)
-    
+
+while True:
+    exit_prompt = Encounter(
+        "-- GAME OVER --",
+        [
+            ("Restart", restart),
+            ("Quit", quit)
+        ]
+    )
+    prompt_encounter(exit_prompt)
