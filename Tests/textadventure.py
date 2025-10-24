@@ -1,11 +1,28 @@
 import os, random
 from enum import Enum
 
+'''
+Encounters list:
+    - Octopus attack
+    - Steal food
+    - Find treasure
+    - Eat (challenged)
+    - Eat (unchallenged)
+    - Explore (Wait encounter)
+    - Rest
+
+
+
+'''
+
+
+end_buffer = False
 def restart():
-    global fih
+    global fih, end_buffer
     fih = Fih(
         luck=random.randrange(10, 200)/100 # 0.1 -> 2
     )
+    end_buffer = False
     
     prompt_encounter(encounter_handler.start_life)
     
@@ -17,16 +34,11 @@ class Encounter:
 
 class Location(Enum):
     HOME = "home"
-    WATER_SURFACE = "the surface"
-    WATER_DEEP = "the bottom"
+    WATER_SURFACE = "the ocean waters"
     REEF = "the reef"
     CAVE = "the cave"
-    DEEP_REEF = "the inner reef"
-    DEEP_CAVE = "the end of the cave"
 
 class Fih:
-    hunger = 1
-    
     def __init__(self, luck):
         # Birth variables
         self.luck = luck
@@ -38,12 +50,15 @@ class Fih:
         self.energy = 0.5
         self.age = 0    # Years, 0 to 5
         self.location = Location.HOME
+        self.depth = 0
         
         # Legacy variables
         self.boldness = 0
         self.sociability = 0
     
     def update(self):
+        global end_buffer
+        
         self.hunger -= 0.05
         self.energy -= 0.025
         self.age += 0.1
@@ -51,19 +66,70 @@ class Fih:
         self.luck = max(0.1, self.luck)
         self.boldness = max(0.1, self.boldness)
         self.sociability = max(0.1, self.sociability)
+        
+        if self.hunger <= 0 or self.energy <= 0:
+            end_buffer = True
+            prompt_encounter(exit_prompt)
             
 fih = Fih(
     luck=random.randrange(10, 200)/100 # 0.1 -> 2
 )
 
+exit_prompt = Encounter(
+        "-- GAME OVER --",
+        [
+            ("Restart", restart),
+            ("Quit", quit)
+        ]
+    )
+
 #region Encounter functions
 
-def explore():
-    print("Explored")
+class RandomEncounters:
+    def __init__(self):
+        self.encounters = dict()
+        
+        self.register_encounter(self.octopus_attack, 0)
+        self.register_encounter(self.steal_food, 0.5)
+        self.register_encounter(self.find_treasure, 1)
     
-def go_home():
-    print("You go home.")
-    fih.location = Location.HOME
+    def register_encounter(self, enc, positivity:float):
+        self.encounters.update({
+            positivity: enc
+        })
+    
+    def get_encounter(self, value):
+        encounter_list = [(e, self.encounters.get(e)) for e in self.encounters]
+        dist = [abs(value-v[0]) for v in encounter_list]
+        
+        return encounter_list[dist.index(min(dist))][1]
+    
+    def octopus_attack(self):
+        global fih
+        fih.energy -= 0.4
+        prompt_encounter(encounter_handler.confirmation("A camouflaged octopus jumps out, attacking you.\nYou have less energy."))
+    def steal_food(self):
+        global fih
+        fih.energy -= 0.2
+        fih.hunger = 1
+        prompt_encounter(encounter_handler.confirmation("While gorging a stash of food you found, you see its owner approaching.\nYou run with the food, tired, but satiated."))
+        
+    def find_treasure(self):
+        global fih
+        fih.energy += 0.3
+        prompt_encounter(encounter_handler.confirmation("While exploring, you find treasure!\nYou are ecstatic, and feel a burst of energy through your fishy veins."))
+random_encounters = RandomEncounters()
+
+def explore():
+    fih.depth = min(5, fih.depth+1)
+    if fih.depth == 1:
+        fih.location = getattr(Location, random.choice(list([l for l in Location if l != Location.HOME])).name)
+    prompt_encounter(encounter_handler.get_wait_encounter())
+def turn_back():
+    fih.depth = max(0, fih.depth-1)
+    if fih.depth == 0:
+        fih.location = Location.HOME
+    prompt_encounter(encounter_handler.get_wait_encounter())
 
 def eat_challenge(fighting: bool):
     if fighting:
@@ -104,8 +170,9 @@ def eat():
         fih.hunger = 1
         prompt_encounter(encounter_handler.confirmation(f"You eat the {random.choice(fih.food_types)}. You are satiated"))
 
-def sleep():
-    print("Slept")
+def rest():
+    fih.energy = 1
+    prompt_encounter(encounter_handler.confirmation("You feel rested."))
     
 #endregion
     
@@ -117,7 +184,7 @@ class Encounters:
             [
                 ("Explore around", explore),
                 ("Eat", eat),
-                ("Sleep", sleep)
+                ("Rest", rest)
             ])
         self.eat_fight = Encounter(
             f"You go for the {random.choice(fih.food_types)}, but are challenged.",
@@ -127,39 +194,33 @@ class Encounters:
             ]
         )
         
-    def get_explore_encounter(self):
-        pass
-        
     def get_wait_encounter(self):
         options = [
-            ("Explore", explore),
             ("Eat", eat),
         ]
+        turn_back_msg = "Go home" if fih.depth == 1 else "Turn back"
+        if fih.depth > 0: options.append((turn_back_msg, turn_back)) 
+        if fih.depth < 5: options.insert(0, ("Explore", explore))
+        
         match fih.location:
             case Location.HOME:
                 options.extend([
-                    ("Sleep", sleep),
-                ])
-            case Location.WATER_SURFACE:
-                options.extend([
-                    ("Go home", go_home),
-                ])
-            case Location.WATER_DEEP:
-                options.extend([
-                    ("Go home", go_home),
+                    ("Rest", rest),
                 ])
             case Location.REEF:
-                options.extend([
-                    ("Go home", go_home),
-                ])
+                if fih.depth == 5:
+                    options.extend([
+                        ("Rest", rest),
+                    ])
             case Location.CAVE:
-                options.extend([
-                    ("Go home", go_home),
-                ])
+                if fih.depth == 5:
+                    options.extend([
+                        ("Rest", rest),
+                    ])
         
         print(options)
         return Encounter(
-            f"You are alone at {fih.location.value}",
+            f"You are {"alone at" if fih.depth < 5 else "deep in"} {fih.location.value}",
             options
         )
         
@@ -175,42 +236,41 @@ encounter_handler = Encounters()
 
 def prompt_encounter(encounter:Encounter):
     global fih
-    fih.update()
+    if not end_buffer: fih.update()
     
-    def get_response():
-        os.system('cls')
+    if random.randint(0, 100) <= 20:    # 20% chance. Might need tweaking.
+        encounter_luck = (0.5 * fih.luck) + (float(random.randint(-25, 25))/100)
+        rand_encounter = random_encounters.get_encounter(encounter_luck)
+        rand_encounter()
         
-        print(f"-- Stats --\n\
-Food   {(chr(9608) + " ") * int(fih.hunger//0.1)}\n\
-Energy {(chr(9608) + " ") * int(fih.energy//0.1)}\n\
-Age    {(chr(9608) + " ") * int(fih.age//0.5)}\n\n\
-          ")
-        
-        print(encounter.prompt + "\n----------\n")
-        for i, option in enumerate(encounter.options):
-            print(f"{i+1}) {option[0]}")
+    else:
+        def get_response():
+            os.system('cls')
             
-        response = input("\n>")
-        try:
-            _result = int(response)
-            if 0 < _result <= len(encounter.options):
-                return _result
-            raise IndexError
-        except:
-            return get_response()
-    response = get_response()
-    
-    os.system('cls')
-    encounter.options[response-1][1]()
+            print(f"-- Stats --\n\
+    Food   {(chr(9608) + " ") * int(fih.hunger//0.1)}\n\
+    Energy {(chr(9608) + " ") * int(fih.energy//0.1)}\n\
+    Age    {(chr(9608) + " ") * int(fih.age//0.5)}\n\n\
+            ")
+            
+            print(encounter.prompt + "\n----------\n")
+            for i, option in enumerate(encounter.options):
+                print(f"{i+1}) {option[0]}")
+                
+            response = input("\n>")
+            try:
+                _result = int(response)
+                if 0 < _result <= len(encounter.options):
+                    return _result
+                raise IndexError
+            except:
+                return get_response()
+        response = get_response()
+        
+        os.system('cls')
+        encounter.options[response-1][1]()
 
 prompt_encounter(encounter_handler.start_life)
 
 while True:
-    exit_prompt = Encounter(
-        "-- GAME OVER --",
-        [
-            ("Restart", restart),
-            ("Quit", quit)
-        ]
-    )
     prompt_encounter(exit_prompt)
