@@ -1,4 +1,4 @@
-import os, random
+import os, random, time
 from enum import Enum
 
 '''
@@ -36,7 +36,20 @@ class Location(Enum):
     HOME = "home"
     WATER_SURFACE = "the ocean waters"
     REEF = "the reef"
+    INNER_REEF = "the inner reef"
     CAVE = "the cave"
+    INNER_CAVE = "the inner cave"
+
+invalid_random_locs = [
+    Location.HOME,
+    Location.INNER_REEF,
+    Location.INNER_CAVE
+]
+
+def get_inner_location(loc: Location):
+        if loc == Location.REEF: return Location.INNER_REEF
+        if loc == Location.CAVE: return Location.INNER_CAVE
+        return loc
 
 class Fih:
     def __init__(self, luck):
@@ -57,7 +70,9 @@ class Fih:
         self.sociability = 0
     
     def update(self):
-        global end_buffer
+        global end_buffer, iterations_since_last_random
+        
+        iterations_since_last_random += 1
         
         self.hunger -= 0.05
         self.energy -= 0.025
@@ -85,12 +100,16 @@ exit_prompt = Encounter(
 
 #region Encounter functions
 
+struggle_count = 0
+struggle_start_time = 0
+iterations_since_last_random = 0
+
 class RandomEncounters:
     def __init__(self):
         self.encounters = dict()
         
         self.register_encounter(self.octopus_attack, 0)
-        self.register_encounter(self.steal_food, 0.5)
+        self.register_encounter(self.steal_food, 0.75)
         self.register_encounter(self.find_treasure, 1)
     
     def register_encounter(self, enc, positivity:float):
@@ -105,25 +124,53 @@ class RandomEncounters:
         return encounter_list[dist.index(min(dist))][1]
     
     def octopus_attack(self):
-        global fih
-        fih.energy -= 0.4
-        prompt_encounter(encounter_handler.confirmation("A camouflaged octopus jumps out, attacking you.\nYou have less energy."))
+        global fih, struggle_count, struggle_start_time
+        if struggle_start_time != 0:
+            struggle_count += 1
+        else:
+            struggle_start_time = time.time()
+        
+        if struggle_count <= 10:    
+            prompt_encounter(
+                encounter_handler.octupus_fight
+                , update=False
+                )
+        else:
+            if time.time() - struggle_start_time < 5:
+                prompt_encounter(encounter_handler.confirmation(
+                    "You won against the octopus. You are tired, but alive.",
+                ), update=False)
+            else:
+                prompt_encounter(encounter_handler.confirmation(
+                    "You got away, but barely. You are very tired."
+                ), update=False)
+            struggle_count = 0
+        
     def steal_food(self):
         global fih
-        fih.energy -= 0.2
+        fih.energy -= 0.1
         fih.hunger = 1
-        prompt_encounter(encounter_handler.confirmation("While gorging a stash of food you found, you see its owner approaching.\nYou run with the food, tired, but satiated."))
+        prompt_encounter(
+            encounter_handler.confirmation(
+                "While gorging a stash of food you found, you see its owner approaching.\nYou run with the food, tired, but satiated."
+                ), update=False)
         
     def find_treasure(self):
         global fih
         fih.energy += 0.3
-        prompt_encounter(encounter_handler.confirmation("While exploring, you find treasure!\nYou are ecstatic, and feel a burst of energy through your fishy veins."))
+        prompt_encounter(
+            encounter_handler.confirmation
+            ("While exploring, you find treasure!\nYou are ecstatic, and feel a burst of energy through your fishy veins."
+            ), update=False)
 random_encounters = RandomEncounters()
 
 def explore():
-    fih.depth = min(5, fih.depth+1)
+    fih.depth = min(6, fih.depth+1)
     if fih.depth == 1:
-        fih.location = getattr(Location, random.choice(list([l for l in Location if l != Location.HOME])).name)
+        fih.location = getattr(Location, random.choice(list([l for l in Location if l not in invalid_random_locs])).name)
+    elif fih.depth > 5:
+        fih.location = get_inner_location(fih.location)
+        
     prompt_encounter(encounter_handler.get_wait_encounter())
 def turn_back():
     fih.depth = max(0, fih.depth-1)
@@ -171,7 +218,7 @@ def eat():
         prompt_encounter(encounter_handler.confirmation(f"You eat the {random.choice(fih.food_types)}. You are satiated"))
 
 def rest():
-    fih.energy = 1
+    fih.energy = max(1, fih.energy)
     prompt_encounter(encounter_handler.confirmation("You feel rested."))
     
 #endregion
@@ -179,6 +226,8 @@ def rest():
     
 class Encounters:
     def __init__(self):
+        global struggle_count
+        
         self.start_life = Encounter(
             "You are born in a nest of pebbles.",
             [
@@ -191,6 +240,11 @@ class Encounters:
             [
                 ("Fight", lambda: eat_challenge(True)),
                 ("Surrender", lambda: eat_challenge(False))
+            ])
+        self.octupus_fight = Encounter(
+            f"Quick! Fight back!\nAn octopus took hold of you ({struggle_count}/10)",
+            [
+                ("Struggle", random_encounters.octopus_attack)
             ]
         )
         
@@ -211,16 +265,23 @@ class Encounters:
                 if fih.depth == 5:
                     options.extend([
                         ("Rest", rest),
+                        ("Travel to Inner Reef", explore)
+                    ])
+                elif fih.depth == 6:
+                    options.extend([
                     ])
             case Location.CAVE:
                 if fih.depth == 5:
                     options.extend([
                         ("Rest", rest),
+                        ("Travel to Inner Cave", explore)
+                    ])
+                elif fih.depth == 6:
+                    options.extend([
                     ])
         
-        print(options)
         return Encounter(
-            f"You are {"alone at" if fih.depth < 5 else "deep in"} {fih.location.value}",
+            f"You are {"alone at" if fih.depth != 5 else "deep in"} {fih.location.value}",
             options
         )
         
@@ -234,13 +295,14 @@ class Encounters:
         
 encounter_handler = Encounters()
 
-def prompt_encounter(encounter:Encounter):
-    global fih
-    if not end_buffer: fih.update()
+def prompt_encounter(encounter:Encounter, update:bool=True):
+    global fih, iterations_since_last_random
+    if not end_buffer and update: fih.update()
     
-    if random.randint(0, 100) <= 20:    # 20% chance. Might need tweaking.
-        encounter_luck = (0.5 * fih.luck) + (float(random.randint(-25, 25))/100)
+    if random.randint(0, 100) <= 20*(fih.age/2) * (iterations_since_last_random-1)/3:
+        encounter_luck = (0.5 * fih.luck) + (float(random.randint(-40, 40))/100)
         rand_encounter = random_encounters.get_encounter(encounter_luck)
+        iterations_since_last_random = 0
         rand_encounter()
         
     else:
