@@ -10,8 +10,9 @@ Encounters list:
     - Eat (unchallenged)
     - Explore (Wait encounter)
     - Rest
-
-
+    - Welcome (Inner reef)
+    - Welcome (Inner cave)
+    
 
 '''
 
@@ -47,9 +48,16 @@ invalid_random_locs = [
 ]
 
 def get_inner_location(loc: Location):
-        if loc == Location.REEF: return Location.INNER_REEF
-        if loc == Location.CAVE: return Location.INNER_CAVE
-        return loc
+    match loc:
+        case Location.CAVE: return Location.INNER_CAVE
+        case Location.REEF: return Location.INNER_REEF
+        case _: return loc
+def get_outer_location(inner: Location):
+    match inner:
+        case Location.INNER_CAVE: return Location.CAVE
+        case Location.INNER_REEF: return Location.REEF
+        case _: return inner
+
 
 class Fih:
     def __init__(self, luck):
@@ -62,8 +70,10 @@ class Fih:
         self.health = 0.5
         self.energy = 0.5
         self.age = 0    # Years, 0 to 5
+        
         self.location = Location.HOME
         self.depth = 0
+        self.visited_locations = set()
         
         # Legacy variables
         self.boldness = 0
@@ -171,12 +181,18 @@ def explore():
     elif fih.depth > 5:
         fih.location = get_inner_location(fih.location)
         
+        if fih.location not in fih.visited_locations:
+            encounter_handler    
+        
+    fih.visited_locations.add(fih.location)
     prompt_encounter(encounter_handler.get_wait_encounter())
-def turn_back():
+def turn_back(wait: bool = True):
     fih.depth = max(0, fih.depth-1)
     if fih.depth == 0:
         fih.location = Location.HOME
-    prompt_encounter(encounter_handler.get_wait_encounter())
+    elif fih.depth == 5:
+        fih.location = get_outer_location(fih.location)
+    if wait: prompt_encounter(encounter_handler.get_wait_encounter())   # ONLY SET TO FALSE IF YOU'RE PROMPTING A DIFFERENT ENCOUNTER IN PLACE OF 'WAIT'
 
 def eat_challenge(fighting: bool):
     if fighting:
@@ -248,7 +264,7 @@ class Encounters:
             ]
         )
         
-    def get_wait_encounter(self):
+    def get_wait_encounter(self, additional_msg: str = ""):
         options = [
             ("Eat", eat),
         ]
@@ -281,7 +297,7 @@ class Encounters:
                     ])
         
         return Encounter(
-            f"You are {"alone at" if fih.depth != 5 else "deep in"} {fih.location.value}",
+            f"{additional_msg}{"\n\n" if additional_msg != "" else ""}You are {"alone at" if fih.depth != 5 else "deep in"} {fih.location.value}",
             options
         )
         
@@ -292,6 +308,41 @@ class Encounters:
                 ("Continue", lambda: prompt_encounter(self.get_wait_encounter()))
             ]
         )
+    
+    def dialogue(self, name: str, msg: str, options: list, last_response:str=""):
+        enc = Encounter(
+            f'"{last_response}{"\n\n" if last_response != "" else ""}"{name}:\n    {msg}',
+            options
+        )
+        return enc
+    
+    def get_welcome_encounter(self, loc: Location):
+        
+        def fall_back():
+            turn_back(False)
+            prompt_encounter(
+                
+            )
+        
+        match loc:
+            case Location.INNER_CAVE:
+                greeting = "Ivan"
+                return self.dialogue(
+                    name=greeting,
+                    msg="Hey, I don't recognize you. You looking for trouble..?",
+                    options=[
+                        ("Confirm (fight)", lambda: self.dialogue(
+                                name=greeting,
+                                last_response="Yeah. matter'a fact, I am."
+                                msg="You don't wanna do this pal.",
+                                options=[
+                                    ("Double down (fight)", fight_ivan),
+                                    ("Fall back", fall_back)
+                                ])
+                        ),
+                        ("Deny"),
+                        ("Run")])
+            case _: None    # Already happens by default; Just for clarity.
         
 encounter_handler = Encounters()
 
