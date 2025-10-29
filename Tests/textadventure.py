@@ -85,14 +85,19 @@ class Fih:
         iterations_since_last_random += 1
         
         self.hunger -= 0.05
-        self.energy -= 0.025
+        self.energy -= 0.02
+        self.energy += (
+            (pow(-24.5*self.hunger,2)+(9.8*self.hunger)-0.98) if self.hunger <= 0.2     # y = -24.5x^2 + 9.8x - 0.98
+            else pow(-0.125*self.hunger,2)+(0.275*self.hunger)-0.05                     # y = -0.125x^2 + 0.275x - 0.05
+        )
+        
         self.age += 0.1
         
         self.luck = max(0.1, self.luck)
         self.boldness = max(0.1, self.boldness)
         self.sociability = max(0.1, self.sociability)
         
-        if self.hunger <= 0 or self.energy <= 0:
+        if self.energy <= 0:
             end_buffer = True
             prompt_encounter(exit_prompt)
             
@@ -182,7 +187,7 @@ def explore():
         fih.location = get_inner_location(fih.location)
         
         if fih.location not in fih.visited_locations:
-            encounter_handler    
+            prompt_encounter(encounter_handler.get_welcome_encounter(fih.location))
         
     fih.visited_locations.add(fih.location)
     prompt_encounter(encounter_handler.get_wait_encounter())
@@ -236,6 +241,20 @@ def eat():
 def rest():
     fih.energy = max(1, fih.energy)
     prompt_encounter(encounter_handler.confirmation("You feel rested."))
+    
+def quick_time(wait_msg, attack_msg, time_limit):
+    start_time = time.time()
+    os.system('cls')
+    print(wait_msg)
+    
+    while (start_time < random.randrange(2,5)):
+        pass
+    prompt_encounter(Encounter(
+        prompt=attack_msg,
+        options=[
+            ("Attack", lambda: (time.time() - start_time) < time_limit)
+        ]
+    ), False)
     
 #endregion
     
@@ -301,11 +320,11 @@ class Encounters:
             options
         )
         
-    def confirmation(self, msg):
+    def confirmation(self, msg, wait:bool=True):    # ONLY SET WAIT TO FALSE IF YOU'RE PROMPTING A DIFFERENT ENCOUNTER IN PLACE OF 'WAIT'
         return Encounter(
             msg,
             [
-                ("Continue", lambda: prompt_encounter(self.get_wait_encounter()))
+                ("Continue", (lambda: prompt_encounter(self.get_wait_encounter())) if wait else lambda: True)
             ]
         )
     
@@ -320,9 +339,26 @@ class Encounters:
         
         def fall_back():
             turn_back(False)
-            prompt_encounter(
-                
-            )
+            add_msg = ""
+            match loc:
+                case Location.INNER_CAVE: add_msg = "You leave the inner cave, choosing not to confront Ivan."
+                case Location.INNER_REEF: add_msg = "You leave the inner reef, off-put by Bubbles's energy."
+                case _: None
+            prompt_encounter(encounter_handler.get_wait_encounter(add_msg))
+            
+        def fight_ivan():
+            win_count = 0
+            for i in range(4):
+                if quick_time("Ivan gets ready to charge you...", "Ivan charges!", 2/(i+1)):    # 2/(i+1) means the first attack will require 2 seconds, and the last will require 0.5.
+                    win_count += 1
+                    prompt_encounter(encounter_handler.confirmation("Ivan charges, but you dodge and land a hit.", False), False)
+                else:
+                    prompt_encounter(encounter_handler.confirmation("You try to fight back, but Ivan lands a hit before you can make a move.", False), False)
+            if win_count >= 3:
+                prompt_encounter()
+        
+        def follow_bubbles():
+            pass
         
         match loc:
             case Location.INNER_CAVE:
@@ -332,14 +368,32 @@ class Encounters:
                     msg="Hey, I don't recognize you. You looking for trouble..?",
                     options=[
                         ("Confirm (fight)", lambda: self.dialogue(
-                                name=greeting,
-                                last_response="Yeah. matter'a fact, I am."
-                                msg="You don't wanna do this pal.",
-                                options=[
-                                    ("Double down (fight)", fight_ivan),
-                                    ("Fall back", fall_back)
-                                ])
-                        ),
+                            name=greeting,
+                            last_response="Yeah. matter'a fact, I am.",
+                            msg="You don't wanna do this pal.",
+                            options=[
+                                ("Double down (fight)", fight_ivan),
+                                ("Fall back", fall_back)
+                            ]
+                        )),
+                        ("Deny"),
+                        ("Run")])
+            case Location.INNER_REEF:
+                greeting = "Bubbles"
+                return self.dialogue(
+                    name=greeting,
+                    msg="Hey there! My name's Bubbles! I don't believe we've met! Where'd you come from? What's your name? Do you want to meet my friends?",
+                    options=[
+                        ("Confirm (meet friends)", lambda: self.dialogue(
+                            name=greeting,
+                            last_response="Oh- Okay, sure.",
+                            msg="Yippie!! Come on, come on!!.",
+                            options=[
+                                ("Follow (meet friends)", follow_bubbles),
+                                ("Stay behind (stay in inner reef)", lambda: prompt_encounter(encounter_handler.get_wait_encounter())),
+                                ("Leave inner reef", fall_back)
+                            ]
+                        )),
                         ("Deny"),
                         ("Run")])
             case _: None    # Already happens by default; Just for clarity.
