@@ -85,11 +85,11 @@ class Fih:
         iterations_since_last_random += 1
         
         self.hunger -= 0.05
-        self.energy -= 0.02
+        self.energy -= 0.08
         self.energy += (
             (pow(-24.5*self.hunger,2)+(9.8*self.hunger)-0.98) if self.hunger <= 0.2     # y = -24.5x^2 + 9.8x - 0.98
-            else pow(-0.125*self.hunger,2)+(0.275*self.hunger)-0.05                     # y = -0.125x^2 + 0.275x - 0.05
-        )
+            else (pow(-0.125*self.hunger,2)+(0.275*self.hunger)-0.05)*(1-self.energy)   # y = (-0.125x^2 + 0.275x - 0.05)(1-z) where z = self.energy
+        )   # https://www.desmos.com/calculator/sgqeyniscu
         
         self.age += 0.1
         
@@ -140,26 +140,27 @@ class RandomEncounters:
     
     def octopus_attack(self):
         global fih, struggle_count, struggle_start_time
-        if struggle_start_time != 0:
-            struggle_count += 1
-        else:
-            struggle_start_time = time.time()
-        
-        if struggle_count <= 10:    
-            prompt_encounter(
-                encounter_handler.octupus_fight
-                , update=False
-                )
-        else:
-            if time.time() - struggle_start_time < 5:
-                prompt_encounter(encounter_handler.confirmation(
-                    "You won against the octopus. You are tired, but alive.",
-                ), update=False)
+        def _fight():
+            if struggle_start_time != 0:
+                struggle_count += 1
             else:
-                prompt_encounter(encounter_handler.confirmation(
-                    "You got away, but barely. You are very tired."
-                ), update=False)
-            struggle_count = 0
+                struggle_start_time = time.time()
+            
+            if struggle_count <= 10:    
+                prompt_encounter(
+                    _fight
+                    , update=False, can_rand=False
+                    )
+                
+        if time.time() - struggle_start_time < 5:
+            prompt_encounter(encounter_handler.confirmation(
+                "You won against the octopus. You are tired, but alive.",
+            ), update=False)
+        else:
+            prompt_encounter(encounter_handler.confirmation(
+                "You got away, but barely. You are very tired."
+            ), update=False)
+        struggle_count = 0
         
     def steal_food(self):
         global fih
@@ -187,7 +188,7 @@ def explore():
         fih.location = get_inner_location(fih.location)
         
         if fih.location not in fih.visited_locations:
-            prompt_encounter(encounter_handler.get_welcome_encounter(fih.location))
+            prompt_encounter(encounter_handler.get_welcome_encounter(fih.location), can_rand=False)
         
     fih.visited_locations.add(fih.location)
     prompt_encounter(encounter_handler.get_wait_encounter())
@@ -247,14 +248,19 @@ def quick_time(wait_msg, attack_msg, time_limit):
     os.system('cls')
     print(wait_msg)
     
-    while (start_time < random.randrange(2,5)):
+    def _fight():
+        return time.time() - start_time <= time_limit
+    
+    while (time.time() - start_time < random.randrange(2,5)):
         pass
-    prompt_encounter(Encounter(
+    
+    start_time = time.time()    # resets start_time to be used differently later.
+    return prompt_encounter(Encounter(
         prompt=attack_msg,
         options=[
-            ("Attack", lambda: (time.time() - start_time) < time_limit)
+            ("Attack", _fight)
         ]
-    ), False)
+    ), update=False, can_rand=False)
     
 #endregion
     
@@ -320,11 +326,11 @@ class Encounters:
             options
         )
         
-    def confirmation(self, msg, wait:bool=True):    # ONLY SET WAIT TO FALSE IF YOU'RE PROMPTING A DIFFERENT ENCOUNTER IN PLACE OF 'WAIT'
+    def confirmation(self, msg, stats:bool=True, wait:bool=True):    # ONLY SET WAIT TO FALSE IF YOU'RE PROMPTING A DIFFERENT ENCOUNTER IN PLACE OF 'WAIT'
         return Encounter(
             msg,
             [
-                ("Continue", (lambda: prompt_encounter(self.get_wait_encounter())) if wait else lambda: True)
+                ("Continue", (lambda: prompt_encounter(self.get_wait_encounter(), stats=stats)) if wait else lambda: True)
             ]
         )
     
@@ -344,18 +350,26 @@ class Encounters:
                 case Location.INNER_CAVE: add_msg = "You leave the inner cave, choosing not to confront Ivan."
                 case Location.INNER_REEF: add_msg = "You leave the inner reef, off-put by Bubbles's energy."
                 case _: None
-            prompt_encounter(encounter_handler.get_wait_encounter(add_msg))
+            prompt_encounter(encounter_handler.get_wait_encounter(add_msg), can_rand=False)
             
         def fight_ivan():
             win_count = 0
+            
             for i in range(4):
                 if quick_time("Ivan gets ready to charge you...", "Ivan charges!", 2/(i+1)):    # 2/(i+1) means the first attack will require 2 seconds, and the last will require 0.5.
                     win_count += 1
-                    prompt_encounter(encounter_handler.confirmation("Ivan charges, but you dodge and land a hit.", False), False)
+                    prompt_encounter(encounter_handler.confirmation("Ivan charges, but you dodge and land a hit.", wait=False), stats=False, update=False, can_rand=False)
                 else:
-                    prompt_encounter(encounter_handler.confirmation("You try to fight back, but Ivan lands a hit before you can make a move.", False), False)
+                    prompt_encounter(encounter_handler.confirmation("You try to fight back, but Ivan lands a hit before you can make a move.", wait=False), stats=False, update=False, can_rand=False)
             if win_count >= 3:
-                prompt_encounter()
+                prompt_encounter(
+                    encounter_handler.confirmation("You won the fight against Ivan, gaining access to the inner cave.")
+                    , update=False, can_rand=False)
+            else:
+                fih.location = get_outer_location(fih.location)
+                prompt_encounter(
+                    encounter_handler.confirmation("You lost the fight against Ivan, so you flee the inner cave.")
+                    , update=False, can_rand=False)
         
         def follow_bubbles():
             pass
@@ -367,15 +381,18 @@ class Encounters:
                     name=greeting,
                     msg="Hey, I don't recognize you. You looking for trouble..?",
                     options=[
-                        ("Confirm (fight)", lambda: self.dialogue(
-                            name=greeting,
-                            last_response="Yeah. matter'a fact, I am.",
-                            msg="You don't wanna do this pal.",
-                            options=[
-                                ("Double down (fight)", fight_ivan),
-                                ("Fall back", fall_back)
-                            ]
-                        )),
+                        ("Confirm (fight)", lambda: 
+                            prompt_encounter(
+                                self.dialogue(
+                                    name=greeting,
+                                    last_response="Yeah. matter'a fact, I am.",
+                                    msg="You don't wanna do this pal.",
+                                    options=[
+                                        ("Double down (fight)", fight_ivan),
+                                        ("Fall back", fall_back)
+                                    ]
+                                ), update=False, can_rand=False
+                            )),
                         ("Deny"),
                         ("Run")])
             case Location.INNER_REEF:
@@ -390,7 +407,7 @@ class Encounters:
                             msg="Yippie!! Come on, come on!!.",
                             options=[
                                 ("Follow (meet friends)", follow_bubbles),
-                                ("Stay behind (stay in inner reef)", lambda: prompt_encounter(encounter_handler.get_wait_encounter())),
+                                ("Stay behind (stay in inner reef)", lambda: prompt_encounter(encounter_handler.get_wait_encounter(), can_rand=False)),
                                 ("Leave inner reef", fall_back)
                             ]
                         )),
@@ -400,11 +417,11 @@ class Encounters:
         
 encounter_handler = Encounters()
 
-def prompt_encounter(encounter:Encounter, update:bool=True):
+def prompt_encounter(encounter:Encounter, stats:bool=True, update:bool=True, can_rand:bool=True):
     global fih, iterations_since_last_random
     if not end_buffer and update: fih.update()
     
-    if random.randint(0, 100) <= 20*(fih.age/2) * (iterations_since_last_random-1)/3:
+    if can_rand and random.randint(0, 100) <= 20*(fih.age/2) * (iterations_since_last_random-1)/3:
         encounter_luck = (0.5 * fih.luck) + (float(random.randint(-40, 40))/100)
         rand_encounter = random_encounters.get_encounter(encounter_luck)
         iterations_since_last_random = 0
@@ -414,13 +431,14 @@ def prompt_encounter(encounter:Encounter, update:bool=True):
         def get_response():
             os.system('cls')
             
-            print(f"-- Stats --\n\
-    Food   {(chr(9608) + " ") * int(fih.hunger//0.1)}\n\
-    Energy {(chr(9608) + " ") * int(fih.energy//0.1)}\n\
-    Age    {(chr(9608) + " ") * int(fih.age//0.5)}\n\n\
-            ")
-            
-            print(encounter.prompt + "\n----------\n")
+            if stats:
+                print(f"-- Stats --\n\
+        Food   {(chr(9608) + " ") * int(fih.hunger//0.1)}\n\
+        Energy {(chr(9608) + " ") * int(fih.energy//0.1)}\n\
+        Age    {(chr(9608) + " ") * int(fih.age//0.5)}\n\n\
+                ")
+                
+            print(encounter.prompt + "\n----------\n")    
             for i, option in enumerate(encounter.options):
                 print(f"{i+1}) {option[0]}")
                 
@@ -435,7 +453,7 @@ def prompt_encounter(encounter:Encounter, update:bool=True):
         response = get_response()
         
         os.system('cls')
-        encounter.options[response-1][1]()
+        return encounter.options[response-1][1]()
 
 prompt_encounter(encounter_handler.start_life)
 
