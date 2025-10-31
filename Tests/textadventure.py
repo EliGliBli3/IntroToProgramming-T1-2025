@@ -84,12 +84,15 @@ class Fih:
         
         iterations_since_last_random += 1
         
-        self.hunger -= 0.05
+        self.hunger -= 0.1
         self.energy -= 0.08
         self.energy += (
             (pow(-24.5*self.hunger,2)+(9.8*self.hunger)-0.98) if self.hunger <= 0.2     # y = -24.5x^2 + 9.8x - 0.98
-            else (pow(-0.125*self.hunger,2)+(0.275*self.hunger)-0.05)*(1-self.energy)   # y = (-0.125x^2 + 0.275x - 0.05)(1-z) where z = self.energy
+            else (pow(-0.125*self.hunger,2)+(0.275*self.hunger)-0.05)*(pow((1/2),self.energy))   # y = (-0.125x^2 + 0.275x - 0.05)((1/2)^z) where z = self.energy
         )   # https://www.desmos.com/calculator/sgqeyniscu
+        
+        if self.energy > 1:
+            print("")
         
         self.age += 0.1
         
@@ -115,8 +118,6 @@ exit_prompt = Encounter(
 
 #region Encounter functions
 
-struggle_count = 0
-struggle_start_time = 0
 iterations_since_last_random = 0
 
 class RandomEncounters:
@@ -139,20 +140,18 @@ class RandomEncounters:
         return encounter_list[dist.index(min(dist))][1]
     
     def octopus_attack(self):
-        global fih, struggle_count, struggle_start_time
-        def _fight():
-            if struggle_start_time != 0:
-                struggle_count += 1
-            else:
-                struggle_start_time = time.time()
-            
-            if struggle_count <= 10:    
-                prompt_encounter(
-                    _fight
-                    , update=False, can_rand=False
-                    )
+        global fih
+        win_count = 0
+        for i in range(5):
+            wait_msg = "An octopus waits to attack..." if i == 0 else "The octopus prepares itself"
+            if quick_time(
+                wait_msg=wait_msg,
+                attack_msg=f"The octopus lunges ({i}/5)",
+                time_limit=(1/2)
+            ):
+                win_count += 1
                 
-        if time.time() - struggle_start_time < 5:
+        if win_count > 3:
             prompt_encounter(encounter_handler.confirmation(
                 "You won against the octopus. You are tired, but alive.",
             ), update=False)
@@ -160,7 +159,7 @@ class RandomEncounters:
             prompt_encounter(encounter_handler.confirmation(
                 "You got away, but barely. You are very tired."
             ), update=False)
-        struggle_count = 0
+        win_count = 0
         
     def steal_food(self):
         global fih
@@ -192,6 +191,7 @@ def explore():
         
     fih.visited_locations.add(fih.location)
     prompt_encounter(encounter_handler.get_wait_encounter())
+    
 def turn_back(wait: bool = True):
     fih.depth = max(0, fih.depth-1)
     if fih.depth == 0:
@@ -258,17 +258,15 @@ def quick_time(wait_msg, attack_msg, time_limit):
     return prompt_encounter(Encounter(
         prompt=attack_msg,
         options=[
-            ("Attack", _fight)
+            (f"Attack ({round(time_limit,1)}s)", _fight)
         ]
-    ), update=False, can_rand=False)
+    ), update=False, can_rand=False, stats=False)
     
 #endregion
     
     
 class Encounters:
     def __init__(self):
-        global struggle_count
-        
         self.start_life = Encounter(
             "You are born in a nest of pebbles.",
             [
@@ -282,12 +280,6 @@ class Encounters:
                 ("Fight", lambda: eat_challenge(True)),
                 ("Surrender", lambda: eat_challenge(False))
             ])
-        self.octupus_fight = Encounter(
-            f"Quick! Fight back!\nAn octopus took hold of you ({struggle_count}/10)",
-            [
-                ("Struggle", random_encounters.octopus_attack)
-            ]
-        )
         
     def get_wait_encounter(self, additional_msg: str = ""):
         options = [
@@ -336,7 +328,7 @@ class Encounters:
     
     def dialogue(self, name: str, msg: str, options: list, last_response:str=""):
         enc = Encounter(
-            f'"{last_response}{"\n\n" if last_response != "" else ""}"{name}:\n    {msg}',
+            f'"{last_response}"{"\n\n" if last_response != "" else ""}{name}:\n    {msg}',
             options
         )
         return enc
@@ -356,12 +348,13 @@ class Encounters:
             win_count = 0
             
             for i in range(4):
-                if quick_time("Ivan gets ready to charge you...", "Ivan charges!", 2/(i+1)):    # 2/(i+1) means the first attack will require 2 seconds, and the last will require 0.5.
+                if quick_time("Ivan gets ready to charge you...", "Ivan charges!", 1.5/(i+1)):    # 1.5/(i+1) means that the first quicktime will require 1.5 seconds, and the last will require 1.5/4.
                     win_count += 1
                     prompt_encounter(encounter_handler.confirmation("Ivan charges, but you dodge and land a hit.", wait=False), stats=False, update=False, can_rand=False)
                 else:
                     prompt_encounter(encounter_handler.confirmation("You try to fight back, but Ivan lands a hit before you can make a move.", wait=False), stats=False, update=False, can_rand=False)
             if win_count >= 3:
+                fih.visited_locations.add(fih.location)
                 prompt_encounter(
                     encounter_handler.confirmation("You won the fight against Ivan, gaining access to the inner cave.")
                     , update=False, can_rand=False)
@@ -393,8 +386,20 @@ class Encounters:
                                     ]
                                 ), update=False, can_rand=False
                             )),
-                        ("Deny"),
-                        ("Run")])
+                        ("Deny (passive)", lambda:
+                            prompt_encounter(
+                                self.dialogue(
+                                    name=greeting,
+                                    last_response="No, just passing through.",
+                                    msg="Who do you think you are? Swim past me and you're losing a fin.",
+                                    options=[
+                                        ("Double down (swim past)", fight_ivan),
+                                        ("Fall back", fall_back)
+                                    ]
+                                )
+                            )),
+                        ("Run", fall_back)
+                        ])
             case Location.INNER_REEF:
                 greeting = "Bubbles"
                 return self.dialogue(
