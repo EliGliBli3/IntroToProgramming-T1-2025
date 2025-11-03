@@ -86,9 +86,6 @@ class Fih:
             else ((-0.125*pow(self.hunger, 2) + (0.275 * self.hunger) - 0.05)*(pow(1/2, self.energy)))   # y = (-0.125x^2 + 0.275x - 0.05)((1/2)^z) where z = self.energy
         )   # https://www.desmos.com/calculator/sgqeyniscu
         
-        if self.energy > 1:
-            print("")
-        
         self.age += 0.1
         
         self.luck = max(0.1, self.luck)
