@@ -2,7 +2,7 @@ import os
 
 fav_fruits = ["apple", "Apple", "banana", "orange", "Banana"]
 print(fav_fruits[0])
-print(fav_fruits[::-1][0])
+print(fav_fruits[-1])
 
 fav_fruits.append(input("Add a fruit to the list\n>"))
 def prompt_remove():
