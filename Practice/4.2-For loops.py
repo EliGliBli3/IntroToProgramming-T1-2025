@@ -24,9 +24,7 @@ if not assignment:
     for i in [random.randint(-100, 100) for j in range(100)]:
         if i>0: print(i)
 else:
-    
 # PRACTICE ASSIGNMENT
-
 
     for i in range(1, 11)[::-1]:
         print(i)
@@ -43,3 +41,14 @@ else:
     for c in msg:
         if c in "aeiou": vowel_count+=1
     print(vowel_count)
+    
+    mult_table = input("Enter a number\n>")
+    try:
+        for i in range(10):
+            print(f"{mult_table} x {i+1} = {float(mult_table)*(i+1)}")
+    except:
+        print("That's not a number. No second chances.")
+    
+    names = ["Alice", "Bob", "Charlie"]
+    for name in names:
+        print(f"{"Goodbye" if name == "Charlie" else "Hello"}, {name}!")
