@@ -1,23 +1,23 @@
 import random
 
-for i in range(20):
+for i in range(1, 21):
     if i == 15: break
     print(i)
     
 print("-----\n")
 
-for i in range(30):
+for i in range(1, 31):
     if i%2 == 0: continue
     print(i)
     
 print("-----\n")
     
 for i in range(10):
-    pass    # In the future, will count all even numbers from 1 to 10.
+    pass    # Sum all even numbers from 1 to 10.
 
-for i in range(10)[::-1]:
-    if i+1 == 5: continue
-    print(i+1)
+for i in range(10, 0, -1):
+    if i == 5: continue
+    print(i)
     
 print("-----\n")
 
